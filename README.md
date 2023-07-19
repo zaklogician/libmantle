@@ -26,7 +26,7 @@ APIs for your seL4 Core Platform projects.
 
 <div align="center">
 
-**Current release: libmantle 0.1.0**
+**Development release**
 
 [![license](https://img.shields.io/github/license/zaklogician/libmantle)](https://github.com/zaklogician/libmantle/blob/main/LICENSE.md)
 [![austral](https://img.shields.io/badge/Austral-0.2.0-blue)](https://github.com/austral/austral/releases/tag/v0.2.0)
