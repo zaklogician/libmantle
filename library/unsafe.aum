@@ -1,0 +1,85 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+pragma Unsafe_Module;
+
+import Austral.Memory (
+    Address,
+    nullPointer,
+    Pointer,
+    nullCheck,
+    spanWrite,
+    span
+);
+
+module body Mantle.Unsafe is
+
+    pragma Foreign_Import(External_Name => "mantle_notify");
+    function unsafeNotify(ch: Nat32): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_irq_ack");
+    function unsafeIrqAck(ch: Nat32): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_mr_set");
+    function unsafeMRSet(mr: Nat8, value: Nat64): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_mr_get");
+    function unsafeMRGet(mr: Nat8): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_get_ret_count");
+    function unsafeRetCount(): Nat16 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_get_ret_badge");
+    function unsafeRetBadge(): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_ppcall");
+    function unsafePpcall(ch: Nat32, msginfo_label: Nat64, msginfo_count: Nat16): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_recv");
+    function unsafeRecv(): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_replyrecv");
+    function unsafeReplyRecv(reply_tag_label: Nat64, reply_tag_count: Nat16): Nat64 is
+    end;
+
+    pragma Foreign_Import(External_Name => "mantle_make_address");
+    function unsafeMakeAddress(addr: Nat64): Address[Nat8] is
+    end;
+
+    generic [R: Region]
+    function unsafeMakeSpan(addr: Nat64, size: Index): Span[Nat8, R] is
+        var ptr: Address[Nat8] := unsafeMakeAddress(addr);
+        case nullCheck(ptr) of
+            when None do
+                abort("unsafeMakeSpan: invalid base address.");
+            when Some(value: Pointer[Nat8]) do
+                let final: Index := size - 1;
+                return span(&value, 0, final);
+        end case;
+    end;
+
+    generic [R: Region]
+    function unsafeMakeSpanWrite(addr: Nat64, size: Index): Span![Nat8, R] is
+        var ptr: Address[Nat8] := unsafeMakeAddress(addr);
+        case nullCheck(ptr) of
+            when None do
+                abort("unsafeMakeSpan: invalid base address.");
+            when Some(value: Pointer[Nat8]) do
+                let final: Index := size - 1;
+                var xptr: Pointer[Nat8] := value;
+                return spanWrite(&!xptr, 0, final);
+        end case;
+    end;
+
+
+end module body.

@@ -1,0 +1,62 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Common (
+  Notifiable, notify,
+  Callable, ppcall,
+  Ackable, acknowledge, postpone,
+  Surrenderable, surrender,
+  Readable, toSpan,
+  Writable, toSpanWrite,
+  MessageInfo,
+  MantleUserCap
+);
+
+import Mantle.Generated (
+  Ch00Irq,
+  MemoryCaps,
+  NotificationSource,
+  PpcallSource
+);
+
+module body Program is
+
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource): Unit is
+        case source of
+            when Ch00(irq: Ch00Irq) do
+                -- handle IRQ here
+                postpone(irq);
+            when UnknownNotification(number: Nat32) do
+                -- we hang if we receive an unknown notification
+                while true do
+                   skip;
+                end while;
+        end case;
+        surrender(mem);
+        surrender(cap);
+        return nil;
+    end;
+
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, msginfo: MessageInfo): MessageInfo is
+        surrender(cap);
+        case source of
+           when UnknownPpcall(number: Nat64) do
+                -- we hang if we receive an unknown notification
+                surrender(mem);
+                while true do
+                   skip;
+                end while;
+                return MessageInfo(label => 0, count => 0);
+        end case;
+    end;
+
+    function init(cap: MantleUserCap, mem: MemoryCaps): Unit is
+        surrender(mem);
+        surrender(cap);
+        return nil;
+    end;
+
+end module body.
+

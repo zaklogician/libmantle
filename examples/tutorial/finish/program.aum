@@ -1,0 +1,160 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Common (
+  Notifiable, notify,
+  Callable, ppcall,
+  Ackable, acknowledge, postpone,
+  Surrenderable, surrender,
+  Readable, toSpan,
+  Writable, toSpanWrite,
+  MessageInfo,
+  MantleUserCap
+);
+
+import Mantle.Generated (
+  Ch01Cap, mintCh01,
+  Ch02Cap, mintCh02,
+  Ch00Irq,
+  MemoryCaps, PinpadInputRCap, LocalStateRWCap,
+  NotificationSource,
+  PpcallSource
+);
+
+module body Program is
+
+    -- slots in local state
+    constant CURRENT_CLIENT: Index := 0;
+    constant ENTERED_DIGITS: Index := 1;
+    constant CORRECT: Index := 2;
+
+    function incorrectDigit(digitsSoFar: Nat8, currentDigit: Nat8): Bool is
+        if (digitsSoFar = 0) and (currentDigit = 5) then
+            return false;
+        end if;
+        if (digitsSoFar = 1) and (currentDigit = 4) then
+            return false;
+        end if;
+        if (digitsSoFar = 2) and (currentDigit = 3) then
+            return false;
+        end if;
+        if (digitsSoFar = 3) and (currentDigit = 2) then
+            return false;
+        end if;
+        return true;
+    end;
+
+    generic [R: Region]
+    function notifyClient(cap: &[MantleUserCap,R], client: Nat8): Unit is
+        if client = 1 then
+            let ch01: Ch01Cap := mintCh01(cap);
+            notify(&ch01);
+            surrender(ch01);
+        else if client = 2 then
+            let ch02: Ch02Cap := mintCh02(cap);
+            notify(&ch02);
+            surrender(ch02);
+        end if;
+        return nil;
+    end;
+
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource): Unit is
+        case source of
+            when Ch00(irq: Ch00Irq) do
+                -- handle IRQ here
+                printLn("IRQ on ch 0.");
+                let { localState: LocalStateRWCap
+                    , pinpadInput : PinpadInputRCap } := mem;
+                var local: Span![Nat8, Static] := toSpanWrite(localState);
+                if (local[CURRENT_CLIENT] > 0) and (local[ENTERED_DIGITS] < 4) then
+                    borrow pi: &[PinpadInputRCap, R] := &pinpadInput do
+                        let input: Span[Nat8, R] := toSpan(pi);
+                        printLn(input[0]);
+                        if incorrectDigit(local[ENTERED_DIGITS], input[0]) then
+                            let n1: Nat8 := 1;
+                            local[CORRECT] := n1;
+                        end if;
+                    end borrow;
+                    local[ENTERED_DIGITS] := local[ENTERED_DIGITS] + 1;
+                end if;
+                if (local[ENTERED_DIGITS] = 4) then
+                    if (local[CORRECT] = 0) then
+                        notifyClient(&cap, local[CURRENT_CLIENT]);
+                    end if;
+                    let n0: Nat8 := 0;
+                    local[CURRENT_CLIENT] := n0;
+                    local[ENTERED_DIGITS] := n0;
+                    local[CORRECT] := n0;
+                end if;
+                acknowledge(irq);
+                surrender(pinpadInput);
+            when Ch01() do
+                printLn("Notified on ch 1.");
+                surrender(mem);
+            when Ch02() do
+                printLn("Notified on ch 2.");
+                surrender(mem);
+            when UnknownNotification(number: Nat32) do
+                -- we hang if we receive an unknown notification
+                while true do
+                   skip;
+                end while;
+                surrender(mem);
+        end case;
+        surrender(cap);
+        return nil;
+    end;
+
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, msginfo: MessageInfo): MessageInfo is
+        surrender(cap);
+        case source of
+           when FromCh01() do
+                let { localState: LocalStateRWCap
+                    , pinpadInput : PinpadInputRCap } := mem;
+                surrender(pinpadInput);
+                printLn("Ppcall on ch 1.");
+                var local: Span![Nat8,Static] := toSpanWrite(localState);
+                if local[CURRENT_CLIENT] > 0 then
+                    return MessageInfo(label => 0, count => 0);
+                end if;
+                let n1: Nat8 := 1;
+                local[CURRENT_CLIENT] := n1;
+                local[ENTERED_DIGITS] := n1 * 0;
+                local[CORRECT] := n1 * 0;
+                return MessageInfo(label => 1, count => 0);
+           when FromCh02() do
+                let { localState: LocalStateRWCap
+                    , pinpadInput : PinpadInputRCap } := mem;
+                surrender(pinpadInput);
+                printLn("Ppcall on ch 2.");
+                var local: Span![Nat8,Static] := toSpanWrite(localState);
+                if local[CURRENT_CLIENT] > 0 then
+                    printLn("Oops.");
+                    return MessageInfo(label => 0, count => 0);
+                end if;
+                let n2: Nat8 := 2;
+                local[CURRENT_CLIENT] := n2;
+                local[ENTERED_DIGITS] := n2 * 0;
+                local[CORRECT] := n2 * 0;
+                return MessageInfo(label => 1, count => 0);
+           when UnknownPpcall(number: Nat64) do
+                -- we hang if we receive an unknown notification
+                surrender(mem);
+                while true do
+                   skip;
+                end while;
+                return MessageInfo(label => 0, count => 0);
+        end case;
+    end;
+
+    function init(cap: MantleUserCap, mem: MemoryCaps): Unit is
+        printLn("Hello World!");
+        surrender(mem);
+        surrender(cap);
+        return nil;
+    end;
+
+end module body.
+

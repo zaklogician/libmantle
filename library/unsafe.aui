@@ -1,0 +1,23 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+module Mantle.Unsafe is
+
+    function unsafeNotify(ch: Nat32): Nat64;
+    function unsafeIrqAck(ch: Nat32): Nat64;
+    function unsafeMRSet(mr: Nat8, value: Nat64): Nat64;
+    function unsafeMRGet(mr: Nat8): Nat64;
+    function unsafeRetCount(): Nat16;
+    function unsafeRetBadge(): Nat64;
+    function unsafePpcall(ch: Nat32, msginfo_label: Nat64, msginfo_count: Nat16): Nat64;
+    function unsafeRecv(): Nat64;
+    function unsafeReplyRecv(reply_tag_label: Nat64, reply_tag_count: Nat16): Nat64;
+
+    generic [R: Region]
+    function unsafeMakeSpan(addr: Nat64, size: Index): Span[Nat8, R];
+    generic [R: Region]
+    function unsafeMakeSpanWrite(addr: Nat64, size: Index): Span![Nat8, R];
+
+end module.

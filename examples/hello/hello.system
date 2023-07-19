@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<system>
+    <protection_domain name="hello" priority="254">
+        <program_image path="hello.elf" />
+
+        <map mr="hello_local_state" setvar_vaddr="local_state"
+             vaddr="0x3_000_000" perms="rw" cached="true" />
+    </protection_domain>
+    <memory_region name="hello_local_state" size="0x1_000" />
+</system>

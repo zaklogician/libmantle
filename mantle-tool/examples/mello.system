@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright 2021, Breakaway Consulting Pty. Ltd.
+
+ SPDX-License-Identifier: BSD-2-Clause
+-->
+<system>
+    <protection_domain name="mello" priority="244">
+        <program_image path="mello.elf" />
+    </protection_domain>
+    <protection_domain name="bello" priority="254" pp="true">
+        <program_image path="bello.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="mello" id="0" />
+        <end pd="bello" id="0" />
+    </channel>
+</system>

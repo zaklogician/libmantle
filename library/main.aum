@@ -1,0 +1,75 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Common (
+  MessageInfo,
+  Response,
+  Surrenderable,
+  surrender,
+  MantleSystemCap,
+  mintMSC,
+  MantleUserCap,
+  mintMUC,
+  replyRecv
+);
+
+import Mantle.Generated (
+  NotificationSource,
+  getNotificationSource,
+  PpcallSource,
+  getPpcallSource,
+  MemoryCaps,
+  mintMemoryCaps
+);
+
+import Program (
+  notified,
+  protected,
+  init
+);
+
+module body Mantle.Main is
+    function handlerLoop(cap: MantleSystemCap): MantleSystemCap is
+        let no_reply: Option[MessageInfo] := None();
+        var reply_tag: Option[MessageInfo] := no_reply;
+        while true do
+            let response: Response := replyRecv(&cap, reply_tag);
+            let is_endpoint: Bool := response.badge > 9223372036854775807;
+            if is_endpoint then
+                var b: Nat64 := 9223372036854775807; -- compiler bug workaround
+                b := b + 1;                          -- compiler bug workaround
+                let idx: Nat64 := response.badge - b;
+                let source: PpcallSource := getPpcallSource(&cap, idx);
+                let userCap: MantleUserCap := mintMUC(&cap);
+                let memCap: MemoryCaps := mintMemoryCaps(&cap);
+                reply_tag := Some(value => protected(userCap, memCap, source, response.tag));
+            else
+                var idx: Nat32 := 0;
+                var badge: Nat64 := response.badge;
+                while badge > 0 do
+                    let nextBadge: Nat64 := badge / 2;
+                    if (badge - nextBadge) > nextBadge then
+                        let source: NotificationSource := getNotificationSource(&cap, idx);
+                        let userCap: MantleUserCap := mintMUC(&cap);
+                        let memCap: MemoryCaps := mintMemoryCaps(&cap);
+                        notified(userCap, memCap, source);
+                    end if;
+                    idx := idx + 1;
+                    badge := nextBadge;
+                reply_tag := no_reply;
+                end while;
+            end if;
+        end while;
+        return cap;
+    end;
+
+    function main(rootCap: RootCapability): ExitCode is
+        let msc: MantleSystemCap := mintMSC(&rootCap);
+        init(mintMUC(&msc), mintMemoryCaps(&msc));
+        surrender(handlerLoop(msc));
+        surrenderRoot(rootCap);
+        return ExitSuccess();
+    end;
+end module body.

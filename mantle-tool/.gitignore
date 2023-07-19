@@ -1,0 +1,6 @@
+__pycache__/
+mantle_tool/__pycache__/
+tests/__pycache__/
+.coverage
+.hypothesis/
+.mypy_cache/

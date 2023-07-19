@@ -1,0 +1,92 @@
+#!/bin/bash
+
+#
+# Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+# Function to print help message
+function print_help {
+    echo "You need to define both AUSTRAL and MANTLE environment variables."
+    echo "The former should point to your Austral compiler, the latter to your"
+    echo "libmantle library/ directory."
+    echo "To set these variables, use the following commands in your terminal:"
+    echo "export AUSTRAL=<value>"
+    echo "export MANTLE=<value>"
+    echo "Replace <value> with the desired value for each variable."
+}
+
+# Check if AUSTRAL is set
+if [ -z "$AUSTRAL" ]; then
+    echo "AUSTRAL is not set (location of Austral compiler)"
+    print_help
+    exit 1
+fi
+
+# Check if MANTLE is set
+if [ -z "$MANTLE" ]; then
+    echo "MANTLE is not set (location of libmantle library)"
+    print_help
+    exit 1
+fi
+
+# Check if mantletool exists in the PATH
+if ! command -v mantletool &> /dev/null; then
+    echo "'mantletool' is not found in your PATH"
+    echo "Did you install it using pipx?"
+    exit 1
+fi
+
+# Check if the script is being run from the 'start' directory
+current_directory=${PWD##*/}
+if [ "$current_directory" != "start" ]; then
+    echo "This script must be run from the 'start' directory"
+    exit 1
+fi
+
+
+# 1. (re)generate the API with mantletool
+mantletool -c generated.h          \
+           -i generated.aui        \
+           -m generated.aum        \
+           -g auth tutorial.system
+
+if [ $? -ne 0 ]; then
+  exit 1
+fi
+
+# 2. create target directory
+mkdir -p target
+cp extra/simulator.h target/sel4cp.h
+cp $MANTLE/libmantle.h target/libmantle.h
+cp generated.h target/generated.h
+
+# 3. compile the Austral program w/ libmantle
+$AUSTRAL compile \
+  $MANTLE/unsafe.aui,$MANTLE/unsafe.aum \
+  $MANTLE/common.aui,$MANTLE/common.aum \
+  generated.aui,generated.aum \
+  program.aui,program.aum \
+  $MANTLE/main.aum \
+  --entrypoint=Mantle.Main:main \
+  --target-type=c \
+  --output=target/program.c
+
+if [ $? -ne 0 ]; then
+  rm *.html
+  exit 1
+fi
+
+cd target
+
+# 4. add the appropriate include for mock4cp
+echo '#include "generated.h"' | cat - program.c > program.c.tmp && mv program.c.tmp program.c
+
+# 5. and off we go
+if grep -q "LocalState" generated.h; then
+  cc -DLOCALSTATE program.c -fwrapv -lm -o program.elf
+else
+  cc program.c -fwrapv -lm -o program.elf
+fi
+
+cd ..

@@ -1,0 +1,60 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Unsafe (
+  unsafeRetCount,
+  unsafeRetBadge,
+  unsafeRecv,
+  unsafeReplyRecv
+);
+
+module body Mantle.Common is
+    record MantleSystemCap: Linear is
+    end;
+
+    generic [R: Region]
+    function mintMSC(cap: &[RootCapability, R]): MantleSystemCap is
+        return MantleSystemCap();
+    end;
+
+    instance Surrenderable(MantleSystemCap) is
+        method surrender(cap: MantleSystemCap): Unit is
+            let { } := cap;
+            return nil;
+        end;
+    end;
+
+    record MantleUserCap: Linear is
+    end;
+
+    generic [R: Region]
+    function mintMUC(cap: &[MantleSystemCap, R]): MantleUserCap is
+        return MantleUserCap();
+    end;
+
+    instance Surrenderable(MantleUserCap) is
+        method surrender(cap: MantleUserCap): Unit is
+            let { } := cap;
+            return nil;
+        end;
+    end;
+
+    generic [R: Region]
+    function replyRecv(cap: &[MantleSystemCap,R], reply_tag: Option[MessageInfo]): Response is
+        var tag_label: Nat64 := 0;
+        case reply_tag of
+            when None() do
+                tag_label := unsafeRecv();
+            when Some(value: MessageInfo) do
+                tag_label := unsafeReplyRecv(value.label, value.count);
+        end case;
+        let tag_count: Nat16 := unsafeRetCount();
+        let tag: MessageInfo := MessageInfo(label => tag_label, count => tag_count);
+        let badge: Nat64 := unsafeRetBadge();
+        return Response(badge => badge, tag => tag);
+    end;
+
+end module body.
+

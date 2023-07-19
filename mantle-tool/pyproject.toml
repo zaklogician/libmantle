@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "mantle-tool"
+version = "0.1.0"
+description = "A tool for creating Austral/libmantle interfaces based on seL4 Core Platform system descriptions"
+authors = ["Zoltan A. Kocsis <zaklogician@gmail.com>"]
+readme = "README.md"
+packages = [{include = "mantle_tool"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.4.1"
+hypothesis = "^6.81.1"
+coverage = "^7.2.7"
+autopep8 = "^2.0.2"
+
+[tool.poetry.scripts]
+mantletool = 'mantle_tool.main:main'
+
+[tool.mypy]
+mypy_path = "src"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

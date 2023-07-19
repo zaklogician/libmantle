@@ -1,0 +1,59 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+module Mantle.Common is
+    record MessageInfo: Free is
+        label: Nat64;
+        count: Nat16;
+    end;
+
+    record Response: Free is
+        badge: Nat64;
+        tag: MessageInfo;
+    end;
+
+    typeclass Surrenderable(Cap: Linear) is
+        method surrender(cap: Cap): Unit;
+    end;
+
+    typeclass Notifiable(Cap: Linear) is 
+        generic [R:Region]
+        method notify(cap: &[Cap,R]): Unit;
+    end;
+
+    typeclass Callable(Cap: Linear) is 
+        generic [R:Region]
+        method ppcall(cap: &[Cap,R], tag: MessageInfo): MessageInfo;
+    end;
+
+    typeclass Ackable(Cap: Linear) is
+        method acknowledge(cap: Cap): Unit;
+        method postpone(cap: Cap): Unit;
+    end;
+
+    typeclass Readable(Cap: Linear) is
+        generic [R: Region]
+        method toSpan(object: &[Cap,R]): Span[Nat8, R];
+    end;
+
+    typeclass Writable(Cap: Linear) is
+        generic [R: Region]
+        method toSpanWrite(object: Cap): Span![Nat8, R];
+    end;
+
+    type MantleSystemCap: Linear;
+    generic [R: Region]
+    function mintMSC(cap: &[RootCapability, R]): MantleSystemCap;
+
+    type MantleUserCap: Linear;
+    generic [R: Region]
+    function mintMUC(cap: &[MantleSystemCap, R]): MantleUserCap;
+
+    instance Surrenderable(MantleSystemCap);
+    instance Surrenderable(MantleUserCap);
+
+    generic [R: Region]
+    function replyRecv(cap: &[MantleSystemCap,R], reply_tag: Option[MessageInfo]): Response;
+end module.
