@@ -1,5 +1,7 @@
-<!-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors -->
-<!-- SPDX-License-Identifier: BSD-3-Clause -->
+<!--
+    Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+    SPDX-License-Identifier: CC-BY-SA-4.0
+-->
 
 Contribute to libmantle by:
 * creating an issue on the Github issue tracker; or
