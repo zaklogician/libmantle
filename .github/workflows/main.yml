@@ -1,0 +1,29 @@
+#
+# Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+name: Protect Main Branch Code
+on:
+  push:
+    branches: main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      
+      - name: Check for code changes in main branch
+        run: |
+            files=$(git diff --name-only --diff-filter=d ${{ github.event.before }} ${{ github.sha }})
+            for file in $files; do
+              if [[ $file != ".github/workflows"* ]]; then
+                if ! grep -q 'SPDX-License-Identifier: CC-BY-SA' "$file"; then
+                  echo "$file appears to contain code changes, which cannot be pushed to the 'main' branch."
+                  echo "You can change documentation, but code changes must go through a release/PR."
+                  exit 1
+                fi
+              fi
+            done
