@@ -196,7 +196,7 @@ add something to see.
 and to print a message if an IRQ notification is received on channel id 0.
 
 **Note:** Our simulator redirects `printLn(-)` to `stdout`. On the actual
-seL4 Core Platform, `printLn(-)` invokes `sel4cp_dbg_puts(-)` instead.
+seL4 Core Platform, `printLn(-)` compiles to a no-op.
 
 
 ## Step 2. Handling Protected Procedure Calls
