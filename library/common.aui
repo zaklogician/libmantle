@@ -56,4 +56,10 @@ module Mantle.Common is
 
     generic [R: Region]
     function replyRecv(cap: &[MantleSystemCap,R], reply_tag: Option[MessageInfo]): Response;
+
+    generic [R: Region]
+    function setMR(cap: &[MantleUserCap,R], mr: Nat8, value: Nat64): Unit;
+
+    generic [R: Region]
+    function getMR(cap: &[MantleUserCap,R], mr: Nat8): Nat64;
 end module.

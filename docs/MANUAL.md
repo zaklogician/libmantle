@@ -446,8 +446,9 @@ array[0] := 42;
 The following functions are provided for getting and setting message registers:
 ```ada
 generic [R: Region]
-function setMR(cap: &[MantleUserCap, R], index: Nat16, value: Nat64): Unit
-function getMR(cap: &[MantleUserCap, R], index: Nat16): Nat64
+function setMR(cap: &[MantleUserCap, R], mr: Nat8, value: Nat64): Unit
+generic [R: Region]
+function getMR(cap: &[MantleUserCap, R], mr: Nat8): Nat64
 ```
 
 ## The generated APIs
