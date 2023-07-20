@@ -60,7 +60,6 @@ runtime-fault-safe Austral API.
 For example, if two Protection Domains have a communication channel between
 them, the tool will ensure that the API allows for mutual notification by
 generating capability types that implement the `Notifiable` type class.
-However, if 
 
 Similarly, the tool knows about and respects the priority rules of the seL4
 Core Platform, and will only allow protected procedure calls from

@@ -17,8 +17,8 @@ APIs for your seL4 Core Platform projects.
    abstractions.
    
 2. **Safe APIs:** libmantle processes your project's System Description Files
-   to generate robust and secure APIs in Austral. These APIs use linear types
-   to prevent all runtime faaults, and to rule out common errors such as
+   to generate robust and safe APIs in Austral. These APIs use linear types
+   to prevent all runtime faults, and to rule out common errors such as
    neglecting to acknowledge an IRQ.
 
 3. **FLOSS:** libmantle is free and open-source, released under the BSD
@@ -55,8 +55,8 @@ Moreover, libmantle aids you in avoiding common oversights in seL4 programming,
 such as forgetting to acknowledge IRQs. With libmantle, an IRQ capability is
 issued that allows for explicit acknowledgement of IRQs. Austral's linear type
 system will statically check that you either acknowledged the IRQ, or
-explicitly postponed acknowledging it in all code branche, making it impossible
-to forget them.
+explicitly postponed acknowledging it in all code branches, making it
+impossible to forget them.
 
 **Where does libmantle generate APIs from?**
 
