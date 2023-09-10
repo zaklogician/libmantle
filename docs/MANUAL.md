@@ -229,6 +229,23 @@ to create a MessageInfo with any `label` and `count` values. However, future
 versions of `libmantle` might introduce more stringent checks for this type to
 promote safer and more robust programming practices and prevent runtime faults.
 
+#### `Message` type
+
+```ada
+record Message[T: Free]: Free is
+    label: Nat64;
+    count: Nat16;
+    state: T;
+end;
+```
+
+Represents a tuple of a `MessageInfo` type, along with another value of
+a given type `T`.
+
+Used in the `protected` entry point, where it allows the user to receive and
+return a `MessageInfo` and the (updated) local state at the same time.
+
+
 ### Type classes
 
 #### `Surrenderable` type class
@@ -684,7 +701,8 @@ called `module Program` which implements the following interface:
 ```ada
 import Mantle.Common (
   MantleUserCap,
-  MessageInfo
+  MessageInfo,
+  Message
 );
 
 import Mantle.Generated (
@@ -694,9 +712,10 @@ import Mantle.Generated (
 );
 
 module Program is
-  function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource): Unit;
-  function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, msginfo: MessageInfo): MessageInfo;
-  function init(cap: MantleUserCap, mem: MemoryCaps): Unit;
+  type LocalState: Free;
+  function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState;
+  function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState];
+  function init(cap: MantleUserCap, mem: MemoryCaps): LocalState;
 end module.
 ```
 
@@ -708,6 +727,14 @@ points. Keep in mind that implementing the `protected` entry point is not
 optional: if your protection domain does not provide a protected procedure
 call, you should implement a deliberate failure case here instead of failing
 silently (as libsel4cp does by default).
+
+An important difference between seL4 Core Platform and libmantle entry points
+comes from the fact that seL4 Core Platform entry points can maintain
+persistent state by modifying global variables. Since Austral lacks global
+variables, libmantle takes a different approach to persistent state: you can
+define a `LocalState` type. A value of this type is returned by all entry
+points, and saved by libmantle. On the subsequent call, the entry point
+receives the saved value as an argument.
 
 To build your protection domain ELF file, you have to follow the steps below.
 The steps assume that your `Program` module is located in the `program.aum`
@@ -756,21 +783,15 @@ your protection domain logic without going through the seL4 Core Platform.
 
 ## FAQ
 
-**Q: Why can't protection domains thread through mutable local state via
+**Q: Why can't protection domains thread through `Linear` local state via
 their entry points?**
 
 A: At first sight, it seems reasonable to have the `Program` module export
 a type `type UserState: Linear;`, which could be saved and threaded through
-`notify` calls by the system. Essentially, the signature of the `notify`
-entry point would become
+`notified` calls by the system.
 
-```ada
-function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: UserState): UserState;
-```
-
-and similarly for the other entry points. This might be implemented at some
-point, but it requires careful investigation. For example, this would allow the
-user to define
+This might be implemented at some point in the future, but it requires careful
+investigation. For example, this would allow the user to define
 
 ```aud
 record UserState: Linear is
