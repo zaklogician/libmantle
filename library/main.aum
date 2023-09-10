@@ -5,6 +5,7 @@
 
 import Mantle.Common (
   MessageInfo,
+  Message,
   Response,
   Surrenderable,
   surrender,
@@ -25,15 +26,17 @@ import Mantle.Generated (
 );
 
 import Program (
+  LocalState,
   notified,
   protected,
   init
 );
 
 module body Mantle.Main is
-    function handlerLoop(cap: MantleSystemCap): MantleSystemCap is
+    function handlerLoop(cap: MantleSystemCap, initial_state: LocalState): MantleSystemCap is
         let no_reply: Option[MessageInfo] := None();
         var reply_tag: Option[MessageInfo] := no_reply;
+        var state: LocalState := initial_state;
         while true do
             let response: Response := replyRecv(&cap, reply_tag);
             let is_endpoint: Bool := response.badge > 9223372036854775807;
@@ -41,10 +44,17 @@ module body Mantle.Main is
                 var b: Nat64 := 9223372036854775807; -- compiler bug workaround
                 b := b + 1;                          -- compiler bug workaround
                 let idx: Nat64 := response.badge - b;
-                let source: PpcallSource := getPpcallSource(&cap, idx);
+                -- make protected call
                 let userCap: MantleUserCap := mintMUC(&cap);
                 let memCap: MemoryCaps := mintMemoryCaps(&cap);
-                reply_tag := Some(value => protected(userCap, memCap, source, response.tag));
+                let source: PpcallSource := getPpcallSource(&cap, idx);
+                let incoming: Message[LocalState] :=
+                    Message(label => response.tag.label, count => response.tag.count, state => state);
+                let outgoing: Message[LocalState] := protected(userCap, memCap, source, incoming);
+                -- save state and reply_tag
+                state := outgoing.state;
+                reply_tag :=
+                    Some(value => MessageInfo(label => outgoing.label, count => outgoing. count));
             else
                 var idx: Nat32 := 0;
                 var badge: Nat64 := response.badge;
@@ -54,7 +64,7 @@ module body Mantle.Main is
                         let source: NotificationSource := getNotificationSource(&cap, idx);
                         let userCap: MantleUserCap := mintMUC(&cap);
                         let memCap: MemoryCaps := mintMemoryCaps(&cap);
-                        notified(userCap, memCap, source);
+                        state := notified(userCap, memCap, source, state);
                     end if;
                     idx := idx + 1;
                     badge := nextBadge;
@@ -67,8 +77,8 @@ module body Mantle.Main is
 
     function main(rootCap: RootCapability): ExitCode is
         let msc: MantleSystemCap := mintMSC(&rootCap);
-        init(mintMUC(&msc), mintMemoryCaps(&msc));
-        surrender(handlerLoop(msc));
+        let state: LocalState := init(mintMUC(&msc), mintMemoryCaps(&msc));
+        surrender(handlerLoop(msc, state));
         surrenderRoot(rootCap);
         return ExitSuccess();
     end;

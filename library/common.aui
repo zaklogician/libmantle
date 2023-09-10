@@ -9,6 +9,12 @@ module Mantle.Common is
         count: Nat16;
     end;
 
+    record Message[T: Free]: Free is
+        label: Nat64;
+        count: Nat16;
+        state: T;
+    end;
+
     record Response: Free is
         badge: Nat64;
         tag: MessageInfo;
