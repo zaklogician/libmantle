@@ -11,6 +11,7 @@ import Mantle.Common (
   Readable, toSpan,
   Writable, toSpanWrite,
   MessageInfo,
+  Message,
   MantleUserCap
 );
 
@@ -23,7 +24,10 @@ import Mantle.Generated (
 
 module body Program is
 
-    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource): Unit is
+    record LocalState: Free is
+    end;
+
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState is
         case source of
             when Ch00(irq: Ch00Irq) do
                 -- handle IRQ here
@@ -36,10 +40,10 @@ module body Program is
         end case;
         surrender(mem);
         surrender(cap);
-        return nil;
+        return LocalState();
     end;
 
-    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, msginfo: MessageInfo): MessageInfo is
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState] is
         surrender(cap);
         case source of
            when UnknownPpcall(number: Nat64) do
@@ -48,14 +52,14 @@ module body Program is
                 while true do
                    skip;
                 end while;
-                return MessageInfo(label => 0, count => 0);
+                return Message(label => 0, count => 0, state => message.state);
         end case;
     end;
 
-    function init(cap: MantleUserCap, mem: MemoryCaps): Unit is
+    function init(cap: MantleUserCap, mem: MemoryCaps): LocalState is
         surrender(mem);
         surrender(cap);
-        return nil;
+        return LocalState();
     end;
 
 end module body.
