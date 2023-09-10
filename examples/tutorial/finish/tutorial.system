@@ -11,9 +11,6 @@
         <map mr="pinpad_input_reg" setvar_vaddr="pinpad_input"
              vaddr="0x2_000_000" perms="r" cached="false" />
 
-        <map mr="auth_local_state" setvar_vaddr="local_state"
-             vaddr="0x3_000_000" perms="rw" cached="true" />
-
         <!-- number pad: character ready to read IRQ -->
         <irq irq="212" id="0" />
     </protection_domain>

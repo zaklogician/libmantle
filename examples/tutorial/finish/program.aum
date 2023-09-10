@@ -11,6 +11,7 @@ import Mantle.Common (
   Readable, toSpan,
   Writable, toSpanWrite,
   MessageInfo,
+  Message,
   MantleUserCap
 );
 
@@ -18,7 +19,7 @@ import Mantle.Generated (
   Ch01Cap, mintCh01,
   Ch02Cap, mintCh02,
   Ch00Irq,
-  MemoryCaps, PinpadInputRCap, LocalStateRWCap,
+  MemoryCaps, PinpadInputRCap,
   NotificationSource,
   PpcallSource
 );
@@ -30,130 +31,194 @@ module body Program is
     constant ENTERED_DIGITS: Index := 1;
     constant CORRECT: Index := 2;
 
-    function incorrectDigit(digitsSoFar: Nat8, currentDigit: Nat8): Bool is
-        if (digitsSoFar = 0) and (currentDigit = 5) then
+    union PinBuffer: Free is
+        case Await0;
+        case Await1 is
+            digit0: Nat8;
+        case Await2 is
+            digit0: Nat8;
+            digit1: Nat8;
+        case Await3 is
+            digit0: Nat8;
+            digit1: Nat8;
+            digit2: Nat8;
+        case Full is
+            digit0: Nat8;
+            digit1: Nat8;
+            digit2: Nat8;
+            digit3: Nat8;
+    end;
+
+    function appendDigit(pinBuffer: PinBuffer, digit: Nat8): PinBuffer is
+        case pinBuffer of
+            when Await0() do
+                return Await1(digit0 => digit);
+            when Await1(digit0: Nat8) do
+                return Await2(digit0 => digit0, digit1 => digit);
+            when Await2(digit0: Nat8, digit1: Nat8) do
+                return Await3(digit0 => digit0, digit1 => digit1, digit2 => digit);
+            when Await3(digit0: Nat8, digit1: Nat8, digit2: Nat8) do
+                return Full(digit0 => digit0, digit1 => digit1, digit2 => digit2, digit3 => digit);
+            when Full(digit0: Nat8, digit1: Nat8, digit2: Nat8, digit3: Nat8) do
+                return Full(digit0 => digit0, digit1 => digit1, digit2 => digit2, digit3 => digit3);
+        end case;
+    end;
+
+    function correctPin(digit0: Nat8, digit1: Nat8, digit2: Nat8, digit3: Nat8): Bool is
+        if (not (digit0 = 5)) then
             return false;
         end if;
-        if (digitsSoFar = 1) and (currentDigit = 4) then
+        if (not (digit1 = 4)) then
             return false;
         end if;
-        if (digitsSoFar = 2) and (currentDigit = 3) then
+        if (not (digit2 = 3)) then
             return false;
         end if;
-        if (digitsSoFar = 3) and (currentDigit = 2) then
+        if (not (digit3 = 2)) then
             return false;
         end if;
         return true;
     end;
 
+    union Client: Free is
+        case Client1;
+        case Client2;
+    end;
+
+    union LocalState: Free is
+        case NoClient;
+        case HaveClient is
+            client: Client;
+            pinBuffer: PinBuffer;
+    end;
+
     generic [R: Region]
-    function notifyClient(cap: &[MantleUserCap,R], client: Nat8): Unit is
-        if client = 1 then
-            let ch01: Ch01Cap := mintCh01(cap);
-            notify(&ch01);
-            surrender(ch01);
-        else if client = 2 then
-            let ch02: Ch02Cap := mintCh02(cap);
-            notify(&ch02);
-            surrender(ch02);
-        end if;
+    function notifyClient(cap: &[MantleUserCap,R], client: Client): Unit is
+        case client of
+            when Client1() do
+                let ch01: Ch01Cap := mintCh01(cap);
+                notify(&ch01);
+                surrender(ch01);
+            when Client2() do
+                let ch02: Ch02Cap := mintCh02(cap);
+                notify(&ch02);
+                surrender(ch02);
+        end case;
         return nil;
     end;
 
-    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource): Unit is
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState is
         case source of
             when Ch00(irq: Ch00Irq) do
                 -- handle IRQ here
                 printLn("IRQ on ch 0.");
-                let { localState: LocalStateRWCap
-                    , pinpadInput : PinpadInputRCap } := mem;
-                var local: Span![Nat8, Static] := toSpanWrite(localState);
-                if (local[CURRENT_CLIENT] > 0) and (local[ENTERED_DIGITS] < 4) then
-                    borrow pi: &[PinpadInputRCap, R] := &pinpadInput do
-                        let input: Span[Nat8, R] := toSpan(pi);
-                        printLn(input[0]);
-                        if incorrectDigit(local[ENTERED_DIGITS], input[0]) then
-                            let n1: Nat8 := 1;
-                            local[CORRECT] := n1;
-                        end if;
-                    end borrow;
-                    local[ENTERED_DIGITS] := local[ENTERED_DIGITS] + 1;
-                end if;
-                if (local[ENTERED_DIGITS] = 4) then
-                    if (local[CORRECT] = 0) then
-                        notifyClient(&cap, local[CURRENT_CLIENT]);
-                    end if;
-                    let n0: Nat8 := 0;
-                    local[CURRENT_CLIENT] := n0;
-                    local[ENTERED_DIGITS] := n0;
-                    local[CORRECT] := n0;
-                end if;
-                acknowledge(irq);
-                surrender(pinpadInput);
+                let { pinpadInput : PinpadInputRCap } := mem;
+                case state of
+                    when NoClient() do
+                        -- we can ignore the input
+                        acknowledge(irq);
+                        surrender(pinpadInput);
+                        surrender(cap);
+                        return NoClient();
+                    when HaveClient(client: Client, pinBuffer: PinBuffer) do
+                        var digit: Nat8 := 0;
+                        borrow pi: &[PinpadInputRCap, R] := &pinpadInput do
+                            let input: Span[Nat8, R] := toSpan(pi);
+                            digit := input[0];
+                            printLn(input[0]);
+                        end borrow;
+                        surrender(pinpadInput);
+                        acknowledge(irq);
+                        let newPinBuffer: PinBuffer := appendDigit(pinBuffer, digit);
+                        case newPinBuffer of
+                            when Await0() do
+                                surrender(cap);
+                                return HaveClient(client => client, pinBuffer => newPinBuffer);
+                            when Await1(digit0: Nat8) do
+                                surrender(cap);
+                                return HaveClient(client => client, pinBuffer => newPinBuffer);
+                            when Await2(digit0: Nat8, digit1: Nat8) do
+                                surrender(cap);
+                                return HaveClient(client => client, pinBuffer => newPinBuffer);
+                            when Await3(digit0: Nat8, digit1: Nat8, digit2: Nat8) do
+                                surrender(cap);
+                                return HaveClient(client => client, pinBuffer => newPinBuffer);
+                            when Full(digit0: Nat8, digit1: Nat8, digit2: Nat8, digit3: Nat8) do
+                                if correctPin(digit0, digit1, digit2, digit3) then
+                                    notifyClient(&cap, client);
+                                end if;
+                                surrender(cap);
+                                return NoClient(); 
+                            end case;
+                end case;
             when Ch01() do
                 printLn("Notified on ch 1.");
                 surrender(mem);
+                surrender(cap);
+                return state;
             when Ch02() do
                 printLn("Notified on ch 2.");
                 surrender(mem);
+                surrender(cap);
+                return state;
             when UnknownNotification(number: Nat32) do
                 -- we hang if we receive an unknown notification
                 while true do
                    skip;
                 end while;
                 surrender(mem);
+                surrender(cap);
+                return state;
         end case;
-        surrender(cap);
-        return nil;
     end;
 
-    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, msginfo: MessageInfo): MessageInfo is
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState] is
         surrender(cap);
+        surrender(mem);
         case source of
            when FromCh01() do
-                let { localState: LocalStateRWCap
-                    , pinpadInput : PinpadInputRCap } := mem;
-                surrender(pinpadInput);
                 printLn("Ppcall on ch 1.");
-                var local: Span![Nat8,Static] := toSpanWrite(localState);
-                if local[CURRENT_CLIENT] > 0 then
-                    return MessageInfo(label => 0, count => 0);
-                end if;
-                let n1: Nat8 := 1;
-                local[CURRENT_CLIENT] := n1;
-                local[ENTERED_DIGITS] := n1 * 0;
-                local[CORRECT] := n1 * 0;
-                return MessageInfo(label => 1, count => 0);
+                case message.state of
+                    when NoClient() do
+                        let newState: LocalState :=
+                            HaveClient(client => Client1(), pinBuffer => Await0());
+                        let response: Message[LocalState] :=
+                            Message(label => 1, count => 0, state => newState);
+                        return response;
+                    when HaveClient(client: Client, pinBuffer: PinBuffer) do
+                        let response: Message[LocalState] :=
+                            Message(label => 0, count => 0, state => message.state);
+                        return response;
+                end case;
            when FromCh02() do
-                let { localState: LocalStateRWCap
-                    , pinpadInput : PinpadInputRCap } := mem;
-                surrender(pinpadInput);
                 printLn("Ppcall on ch 2.");
-                var local: Span![Nat8,Static] := toSpanWrite(localState);
-                if local[CURRENT_CLIENT] > 0 then
-                    printLn("Oops.");
-                    return MessageInfo(label => 0, count => 0);
-                end if;
-                let n2: Nat8 := 2;
-                local[CURRENT_CLIENT] := n2;
-                local[ENTERED_DIGITS] := n2 * 0;
-                local[CORRECT] := n2 * 0;
-                return MessageInfo(label => 1, count => 0);
+                case message.state of
+                    when NoClient() do
+                        let newState: LocalState :=
+                            HaveClient(client => Client2(), pinBuffer => Await0());
+                        let response: Message[LocalState] :=
+                            Message(label => 1, count => 0, state => newState);
+                        return response;
+                    when HaveClient(client: Client, pinBuffer: PinBuffer) do
+                        printLn("Oops.");
+                        let response: Message[LocalState] :=
+                            Message(label => 0, count => 0, state => message.state);
+                        return response;
+                end case;
            when UnknownPpcall(number: Nat64) do
                 -- we hang if we receive an unknown notification
-                surrender(mem);
                 while true do
                    skip;
                 end while;
-                return MessageInfo(label => 0, count => 0);
+                return message;
         end case;
     end;
 
-    function init(cap: MantleUserCap, mem: MemoryCaps): Unit is
-        printLn("Hello World!");
+    function init(cap: MantleUserCap, mem: MemoryCaps): LocalState is
         surrender(mem);
         surrender(cap);
-        return nil;
+        printLn("Hello World!");
+        return NoClient();
     end;
 
 end module body.
