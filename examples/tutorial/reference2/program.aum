@@ -26,11 +26,6 @@ import Mantle.Generated (
 
 module body Program is
 
-    -- slots in local state
-    constant CURRENT_CLIENT: Index := 0;
-    constant ENTERED_DIGITS: Index := 1;
-    constant CORRECT: Index := 2;
-
     union PinBuffer: Free is
         case Await0;
         case Await1 is
