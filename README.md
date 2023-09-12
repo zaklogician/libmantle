@@ -166,7 +166,8 @@ mantletool \
   -g hello examples/hello/hello.system
 ```
 
-and inspecting the `examples/hello/generated.*` files.
+from the root directory of this repository, and inspecting the
+`examples/hello/generated.*` files.
 
 ## Where to go from here?
 
