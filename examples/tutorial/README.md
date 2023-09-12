@@ -1,4 +1,4 @@
-<!--
+input<!--
     Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
     SPDX-License-Identifier: CC-BY-SA-4.0
 -->
@@ -90,8 +90,10 @@ This project contains several key directories and files that you'll be working
 with:
 
 * The `start` directory is where you'll be performing the tasks for this tutorial.
-* The `finish` directory contains the completed code for this tutorial, which can
-  be used for reference.
+* The `reference1` directory contain the completed code for this tutorial,
+  which can be used for reference.
+* The `reference2` directory contains another reference solution, which
+  deviates from the tutorial to showcase more advanced aspects of libmantle.
 * The `tutorial.system` file is the SDF/XML file that defines the system
   architecture for this tutorial. You'll be making changes to it regularly.
 * The `program.aum` file contains the initial Austral program that runs on your
@@ -222,7 +224,7 @@ notification on channel id 1, `auth` will be able to notify `client`'s
 channel 42.
 
 **Note:** The simulator does not care about which channel `id` you use for the
-client. Feel free to use any valid channel id between 0 and 63.
+client. Feel free to use any valid channel id between 0 and 62.
 
 If you try to `compile` your program now, you will get the following error:
 
@@ -298,7 +300,8 @@ When you run the program, you will see an incoming protected procedure call
 on channel 1.
 
 **Task:** Add another channel, connecting channel id 2 of `auth` to
-`client2`. Get the program into a compiling state again.
+`client2` (you can use any valid channel number for the latter). Get the
+program into a compiling state again.
 
 
 ## Step 3. Handling IRQs
@@ -432,8 +435,10 @@ Error:
     Unable to find a type with the name `R`.    
     Consider importing it, if it is defined in another module.
   Code:
-    26 | let register: Span[Nat8, R] := toSpan(&pinpadInput);
+    26 | let input: Span[Nat8, R] := toSpan(&pinpadInput);
 ```
+
+Now, we can save the PIN. To save a digit of the `pin`, you will want to read
 
 What's happening? Well, references and arrays (`Span`s) in Austral are
 specific to a region, and the `toSpan` method is defined to work generically
@@ -460,8 +465,7 @@ is received.
 
 If you succeed, you will see the numbers `5,4,3,2` printed in your terminal.
 
-
-## Step 5. Writing memory
+## Step 5. Managing local state
 
 We're getting close: now, we must verify that the user entered the correct
 PIN, and notify the correct client.
@@ -474,130 +478,51 @@ To do this, `auth` has to remember a couple of things:
 If you were building `auth` in C, you'd probably store these in global
 variables. Things are not quite so simple in Austral and libmantle.
 
-Austral has no global variables, nor mutable function arguments. Moreover,
-the libmantle entry points do not allow you to thread state through them
-(by getting your previous state as an argument and returning a new state).
-If libmantle permitted you to do this, you could use it to duplicate certain
-caps which you are not allowed to mint, such as elements of the `MemoryCaps`
-structure or the `Ch00Irq`.
+Austral has no global variables, nor mutable function arguments. Instead,
+the libmantle entry points allow you to thread state through them, by getting
+the previous state as an argument and returning a new state.
 
-**Note:** Keep in mind that this is version 0.1.0. The API is ever-changing,
-and we have reason to think that future versions might allow you to thread
-local state through in a safe way. See the manual for more information.
+You get to define the type of local state you wish to store, using the
+`LocalState` type declaration. For now, `LocalState` is an empty `record` type,
+but you can redefine it to be any type you wish (including `union`s).
 
-Instead, we will simply use a mapped memory region to store the state of our
-protection domain. Let's create a new memory region in `tutorial.system`:
+We will need to store the following information:
+* the identity of the client we're currently serving (if any)
+* the number of digits entered by the user in the current session
 
-```xml
-<memory_region name="auth_local_state" size="0x1_000" />
-```
-
-To map this new region into the `auth` protection domain, add the following
-inside its element:
-
-```xml
-<map mr="auth_local_state" setvar_vaddr="local_state"
-     vaddr="0x3_000_000" perms="rw" cached="true" />
-```
-
-Recompiling your program will give you the following error message:
+We could design a `union` type that tracks the dependencies between these
+pieces of information: e.g. if we're serving no client, we don't need to store
+the digits. But to keep things simple, we will stick with a `record` in this
+tutorial, as follows:
 
 ```
-Title: Type Error
-Module:
-  Program
-Description:
-  The set of slots mentioned differs from the set of slots in `MemoryCaps`
-Code:
-  26 | let { pinpadInput : PinpadInputRCap } := mem;
-```
-
-What's happening? Well, if you inspect `generated.aui`, you'll see that
-the `MemoryCaps` type has changed:
-
-```ada
-record MemoryCaps: Linear is
-   localState: LocalStateRWCap;
-   pinpadInput: PinpadInputRCap;
+record LocalState: Free is
+    client: Client;
+    pin: Nat64;
 end;
 ```
 
-Apart from the `pinpadInput`, the record now has a field for the `localState`
-memory region as well. Since we mapped this region with a read-write permission
-in `tutorial.system`, the capability is an `RWCap`.
+**Task:** Define a `Client` type with the three possible values, then redefine
+the `LocalState` type as shown above. Get your program to compile again by
+changing the return value of the `init` and `notified` functions.
 
-The error message is telling us that we need to update our destrucuring
-assignment of `mem` to account for this new field. We can do this as follows:
+Now that we can store local state, let's use it to implement proper responses
+to the `protected` calls from the clients. The `protected` call should
+return `label => 1` only if the local state indicates that we're not already
+handling a different client. When we return `1`, we should also set the
+`client` field in the local state to remember the client that made the request.
 
-```ada
-let { localState: LocalStateRWCap
-    , pinpadInput : PinpadInputRCap } := mem;
-```
+**Task:** Implement local state updates in the `protected` entry point.
 
-**Hint:** You will have to import the type `LocalStateRWCap` from the
-`Mantle.Generated` module!
+**Hint:** The local state is handed to the `protected` entry point as the
+`state` field of the `message` argument.
 
-At this stage, you might get the following error message:
+Now, we can save the PIN. We can just store the PIN in the `pin` variable,
+and multiply it by `10` each time we get a new digit. This should happen only
+if a client is currently being served: otherwise, the PIN should be remain
+set to zero.
 
-```
-  Title: Linearity Error
-  Module:
-    Program
-  Description:
-    Forgot to consume a linear variable: `localState`.
-  Code:
-    26 | let { localState: LocalStateRWCap
-    27 |     , pinpadInput : PinpadInputRCap } := mem;
-```
-
-This is the linearity checker telling us that we should either consume this
-capability somewhere, or `surrender` it explicitly.
-
-The `RWCap`s instantiate the `Writable` type class from `Mantle.Common`,
-allowing us to invoke the `toSpanWrite` method:
-
-```ada
-generic [R: Region]
-method toSpanWrite(object: Cap): Span![Nat8, R];
-```
-
-Notice that, unlike `toSpan`, this method consumes the associated capability,
-thereby ensuring that you only have one mutable reference to your mapped
-memory region.
-
-**Note:** This restriction is subject to change in future versions; since the
-`Nat8` type can be updated atomically, most benefits of the "one mutable ref"
-restriction don't apply here. However, this restriction still might be
-necessary for programmers implementing safe abstractions on top of the
-low-level ones provided by libmantle. The raison d'etre of libmantle is
-precisely to serve as a platform for experiments with linearly-typed API design
-for the seL4 Core Platform and beyond.
-
-To create a mutable array from the capability, you can use e.g.
-```ada
-var local: Span![Nat8, Static] := toSpanWrite(localState);
-local[1] := 42;
-```
-
-Let's invent a memory layout for our local state. The rest of the tutorial will
-assume the following, very dense layout, but you are welcome to experiment with
-others, including loading/saving an actual `record` onto the local state memory
-region.
-
-```
-local[0]
-  --^ the number of the client we're currently serving, 0 if none
-local[1]
-  --^ the number of digits entered by the user in the current session
-local[2]
-  --^ 0 if all the digits entered so far were correct, 1 otherwise
-```
-
-**Task:** Implement local state updates in the `notified` and `protected`
-entry points. Change the behavior of `protected` to return `1` only if
-the local state indicates that we're not already handling a different
-client.
-
+**Task:** Implement local state updates in the `notified` entry point.
 
 ## Step 6. Sending notifications
 
@@ -672,3 +597,5 @@ auth prints: 2
 
 If you're getting this sequence of events, then congratulations, you have
 successfully completed the libmantle tutorial.
+
+

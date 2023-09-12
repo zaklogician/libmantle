@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors -->
+<!-- SPDX-License-Identifier: BSD-3-Clause -->
+
+<system>
+    <!-- AUTH DOMAIN -->
+    <protection_domain name="auth" priority="254" pp="true">
+        <program_image path="auth.elf" />
+
+        <!-- number pad: last entered character register -->
+        <map mr="pinpad_input_reg" setvar_vaddr="pinpad_input"
+             vaddr="0x2_000_000" perms="r" cached="false" />
+
+        <!-- number pad: character ready to read IRQ -->
+        <irq irq="212" id="0" />
+    </protection_domain>
+
+    <!-- CLIENT 1 -->
+    <protection_domain name="client1" priority="230">
+        <program_image path="MOCK" />
+    </protection_domain>
+
+    <channel>
+         <end pd="auth" id="1" />
+         <end pd="client1" id="42" />
+    </channel>
+
+    <!-- CLIENT 2 -->
+    <protection_domain name="client2" priority="230">
+        <program_image path="MOCK" />
+    </protection_domain>
+
+    <channel>
+         <end pd="auth" id="2" />
+         <end pd="client2" id="42" />
+    </channel>
+
+    <!-- MEMORY REGIONS -->
+    <memory_region name="pinpad_input_reg" size="0x1_000" phys_addr="0x5d_160_000" />
+</system>

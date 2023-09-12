@@ -28,9 +28,12 @@ module body Program is
     end;
 
     function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState is
+        surrender(mem);
+        surrender(cap);
         case source of
             when Ch00(irq: Ch00Irq) do
                 -- handle IRQ here
+                printLn("IRQ on channel 0");
                 postpone(irq);
             when UnknownNotification(number: Nat32) do
                 -- we hang if we receive an unknown notification
@@ -38,17 +41,15 @@ module body Program is
                    skip;
                 end while;
         end case;
-        surrender(mem);
-        surrender(cap);
-        return LocalState();
+        return state;
     end;
 
     function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState] is
+        surrender(mem);
         surrender(cap);
         case source of
-           when UnknownPpcall(number: Nat64) do
+            when UnknownPpcall(number: Nat64) do
                 -- we hang if we receive an unknown notification
-                surrender(mem);
                 while true do
                    skip;
                 end while;

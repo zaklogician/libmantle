@@ -1,0 +1,26 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Common (
+  Message,
+  MessageInfo,
+  MantleUserCap
+);
+
+import Mantle.Generated (
+  MemoryCaps,
+  NotificationSource,
+  PpcallSource
+);
+
+module Program is
+
+    type LocalState: Free;
+
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState;
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState];
+    function init(cap: MantleUserCap, mem: MemoryCaps): LocalState;
+
+end module.

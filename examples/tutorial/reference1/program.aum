@@ -1,0 +1,170 @@
+--
+-- Copyright 2023, COMAS (ABN 11 932 720 318) and the project contributors
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+
+import Mantle.Common (
+  Notifiable, notify,
+  Callable, ppcall,
+  Ackable, acknowledge, postpone,
+  Surrenderable, surrender,
+  Readable, toSpan,
+  Writable, toSpanWrite,
+  MessageInfo,
+  Message,
+  MantleUserCap
+);
+
+import Mantle.Generated (
+  Ch01Cap,
+  Ch02Cap,
+  Ch00Irq,
+  mintCh01,
+  mintCh02,
+  MemoryCaps,
+  PinpadInputRCap,
+  NotificationSource,
+  PpcallSource
+);
+
+module body Program is
+
+    union Client: Free is
+        case NoClient;
+        case Client1;
+        case Client2;
+    end;
+
+    record LocalState: Free is
+        client: Client;
+        pin: Nat64;
+    end;
+
+    function notified(cap: MantleUserCap, mem: MemoryCaps, source: NotificationSource, state: LocalState): LocalState is
+        case source of
+            when Ch00(irq: Ch00Irq) do
+                -- handle IRQ here
+                printLn("IRQ on channel 0");
+                let { pinpadInput: PinpadInputRCap } := mem;
+                var digit: Nat64 := 0;
+                borrow pi: &[PinpadInputRCap, R] := &pinpadInput do
+                    let input: Span[Nat8, R] := toSpan(pi);
+                    case toNat64(input[0]) of
+                        when Some(value: Nat64) do
+                            digit := value;
+                        when None() do
+                            skip;
+                    end case;
+                end borrow;
+                printLn(digit);
+                surrender(pinpadInput);
+                acknowledge(irq);
+                var newState: LocalState := state;
+                var newPin: Nat64 := state.pin;
+                case state.client of
+                    when NoClient() do
+                        let zero: Nat64 := 0;
+                        newPin := zero;
+                    when Client1() do
+                        let ten: Nat64 := 10;
+                        newPin := (ten*state.pin) + digit;
+                    when Client2() do
+                        let ten: Nat64 := 10;
+                        newPin := (ten*state.pin) + digit;
+                end case;
+                var newClient: Client := state.client;
+                let n5432: Nat64 := 5432;
+                if newPin = n5432 then
+                    -- successful auth, reset state
+                    let zero: Nat64 := 0;
+                    newPin := zero;
+                    newClient := NoClient();
+                    -- notify the client of success
+                    case state.client of
+                        when NoClient() do
+                            skip;
+                        when Client1() do
+                            let ch01: Ch01Cap := mintCh01(&cap);
+                            notify(&ch01);
+                            surrender(ch01);
+                        when Client2() do
+                            let ch02: Ch02Cap := mintCh02(&cap);
+                            notify(&ch02);
+                            surrender(ch02);
+                    end case;
+                end if;
+                let n999: Nat64 := 999;
+                if newPin > n999 then
+                    -- unsuccessful auth, reset state
+                    let zero: Nat64 := 0;
+                    newPin := zero;
+                end if;
+                surrender(cap);
+                return LocalState(client => newClient, pin => newPin);
+            when Ch01() do
+                printLn("Notified on channel 1");
+                surrender(mem);
+                surrender(cap);
+                return state;
+            when Ch02() do
+                printLn("Notified on channel 2");
+                surrender(mem);
+                surrender(cap);
+                return state;
+            when UnknownNotification(number: Nat32) do
+                -- we hang if we receive an unknown notification
+                surrender(mem);
+                surrender(cap);
+                while true do
+                   skip;
+                end while;
+                return state;
+        end case;
+    end;
+
+    function protected(cap: MantleUserCap, mem: MemoryCaps, source: PpcallSource, message: Message[LocalState]): Message[LocalState] is
+        surrender(cap);
+        surrender(mem);
+        case source of
+            when FromCh01() do
+                printLn("Ppcall on channel 1");
+                case message.state.client of
+                    when NoClient() do
+                        let newState: LocalState :=
+                            LocalState(client => Client1(), pin => message.state.pin);
+                        return Message(label => 1, count => 0, state => newState);
+                    when Client1() do
+                        return Message(label => 0, count => 0, state => message.state);
+                    when Client2() do
+                        return Message(label => 0, count => 0, state => message.state);
+                end case;
+            when FromCh02() do
+                printLn("Ppcall on channel 2");
+                case message.state.client of
+                    when NoClient() do
+                        let newState: LocalState :=
+                            LocalState(client => Client2(), pin => message.state.pin);
+                        return Message(label => 1, count => 0, state => newState);
+                    when Client1() do
+                        return Message(label => 0, count => 0, state => message.state);
+                    when Client2() do
+                        return Message(label => 0, count => 0, state => message.state);
+                end case;
+            when UnknownPpcall(number: Nat64) do
+                -- we hang if we receive an unknown notification
+                while true do
+                   skip;
+                end while;
+                return Message(label => 0, count => 0, state => message.state);
+        end case;
+    end;
+
+    function init(cap: MantleUserCap, mem: MemoryCaps): LocalState is
+        printLn("Hello World");
+        surrender(mem);
+        surrender(cap);
+        return LocalState(client => NoClient(), pin => 0);
+    end;
+
+end module body.
+
