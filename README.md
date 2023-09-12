@@ -80,12 +80,13 @@ Before installing `mantletool`, make sure you have Python installed on your
 system. You can verify this by typing `python --version` or
 `python3 --version` into your terminal. If you do not have Python installed,
 please [follow these instructions](https://www.python.org/downloads/) to
-install it.
+install it. You will also need `venv`, to verify that you have it, use
+`python3 -m venv -h` in the terminal.
 
 The project uses `poetry` as a build tool: it handles dependencies and
 streamlines packaging, versioning, and distributing Python packages. This guide
 also requires `pipx`, which will help you install and run `mantletool` in an
-isolated environments, preventing conflicts between different versions of the
+isolated environment, preventing conflicts between different versions of the
 same dependencies.
 
 To install `poetry`, run the following command:
