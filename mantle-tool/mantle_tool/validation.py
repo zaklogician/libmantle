@@ -355,7 +355,7 @@ class InvalidInletNumber:
         description: str = \
             "The inlet number (channel id) of this inlet falls outside the range supported by seL4CP and Mantle."
         hint: str = \
-            "Hint: The number should belong to the range 0..63, inclusive."
+            "Hint: The number should belong to the range 0..62, inclusive."
         location: str = \
             "Location: {provenance}".format(
                 provenance=self.originating_registry.description)
@@ -983,7 +983,7 @@ def validation_errors(registry: Registry) -> list[ValidationError]:
     all_violations.extend(inlet_pd_violations)
 
     inlets_with_invalid_number = \
-        [i for i in registry.inlets if i.number < 0 or i.number > 63]
+        [i for i in registry.inlets if i.number < 0 or i.number > 62]
     inlet_number_violations = \
         [InvalidInletNumber(registry, i) for i in inlets_with_invalid_number]
     all_violations.extend(inlet_number_violations)
